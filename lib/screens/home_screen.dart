@@ -49,12 +49,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(backgroundColor: Color(0xFF0F0F0F), body: Center(child: CircularProgressIndicator(color: Colors.green)));
 
-    // Ambil 1 film untuk banner utama, sisa film untuk list
     Movie? featuredMovie = movies.isNotEmpty ? movies.first : null;
     List<Movie> otherMovies = movies.length > 1 ? movies.sublist(1) : [];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F), // Latar hitam ala Vision+
+      backgroundColor: const Color(0xFF0F0F0F),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF1A1A1A),
         selectedItemColor: Colors.greenAccent,
@@ -73,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Top Bar (Logo & Search)
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -92,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: const TextField(
                           style: TextStyle(color: Colors.white, fontSize: 14),
                           decoration: InputDecoration(
-                            hintText: 'Sistas',
+                            hintText: 'Cari film...',
                             hintStyle: TextStyle(color: Colors.grey),
                             prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
                             border: InputBorder.none,
@@ -102,19 +100,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Mencari', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                    const Text('Cari', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
             ),
-            
-            // 2. Menu Kategori (Sedang tren, dll)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  _buildMenuChip('LIVEll', Colors.red),
+                  _buildMenuChip('LIVE', Colors.red),
                   _buildMenuChip('Sedang tren', Colors.white, isBold: true),
                   _buildMenuChip('MangoTV', Colors.orange),
                   _buildMenuChip('Film', Colors.grey),
@@ -122,8 +118,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            // 3. Banner Utama (Hero)
             if (featuredMovie != null)
               GestureDetector(
                 onTap: () => openPlayer(featuredMovie),
@@ -170,8 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
-            // 4. Judul Bagian
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
               child: Row(
@@ -182,8 +174,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            // 5. Filter Kategori (Semua, K-Drama, dll)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.only(left: 16, bottom: 16),
@@ -197,8 +187,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            // 6. Grid Poster Bernomor
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -228,7 +216,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(otherMovies[index].title, style: const TextStyle(color: Colors.white, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                         ],
                       ),
-                      // Badge Nomor Peringkat
                       Positioned(
                         top: 0, left: 0,
                         child: Container(

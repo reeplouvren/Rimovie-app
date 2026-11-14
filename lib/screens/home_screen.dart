@@ -1,8 +1,11 @@
+import 'login_screen.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/movie.dart';
 import 'player_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,11 +17,38 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Movie> movies = [];
   bool loading = true;
   int _currentIndex = 0;
+  
+  // Variabel untuk Banner Auto-Slide
+  final PageController _pageController = PageController(viewportFraction: 0.9);
+  Timer? _timer;
+  int _currentBannerIndex = 0;
+String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
     fetchMovies();
+  }
+
+  void _startAutoSlide(int totalMovies) {
+    _timer?.cancel();
+    if (totalMovies <= 1) return;
+
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (_currentBannerIndex < (totalMovies > 4 ? 3 : totalMovies - 1)) {
+        _currentBannerIndex++;
+      } else {
+        _currentBannerIndex = 0;
+      }
+      
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          _currentBannerIndex,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   Future<void> fetchMovies() async {
@@ -27,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         movies = (data as List).map((e) => Movie.fromJson(e)).toList();
         loading = false;
+        _startAutoSlide(movies.length);
       });
     } catch (e) {
       setState(() => loading = false);
@@ -34,6 +65,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> openPlayer(Movie movie) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Belum Login', style: TextStyle(color: Colors.white)),
+          content: const Text('Silakan login atau daftar terlebih dahulu untuk menonton film ini.', style: TextStyle(color: Colors.grey)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: const Text('Batal', style: TextStyle(color: Colors.grey))
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => LoginScreen()));
+              }, 
+              child: const Text('Login Sekarang')
+            ),
+          ],
+        )
+      );
+      return;
+    }
+
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.green)));
     final data = await Supabase.instance.client.from('episodes').select().eq('movie_id', movie.id).order('episode_number', ascending: true);
     final episodes = (data as List).map((e) => Episode.fromJson(e)).toList();
@@ -46,11 +104,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(backgroundColor: Color(0xFF0F0F0F), body: Center(child: CircularProgressIndicator(color: Colors.green)));
 
-    Movie? featuredMovie = movies.isNotEmpty ? movies.first : null;
-    List<Movie> otherMovies = movies.length > 1 ? movies.sublist(1) : [];
+List<Movie> filteredMovies = movies.where((movie) {
+  return movie.title.toLowerCase().contains(_searchQuery);
+}).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
@@ -62,10 +128,10 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Beranda'),
-          BottomNavigationBarItem(icon: Icon(Icons.play_circle_outline), label: 'Short TV'),
-          BottomNavigationBarItem(icon: Icon(Icons.download), label: 'Unduhan'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Aku'),
+          BottomNavigationBarItem(icon: Icon(Icons.movie_rounded), label: 'Beranda'),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_display_rounded), label: 'Short TV'),
+          BottomNavigationBarItem(icon: Icon(Icons.download_for_offline_rounded), label: 'Unduhan'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Aku'),
         ],
       ),
       body: SingleChildScrollView(
@@ -84,86 +150,124 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Container(
-                        height: 40,
-                        decoration: BoxDecoration(color: const Color(0xFF2A2A2A), borderRadius: BorderRadius.circular(8)),
-                        child: const TextField(
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: 'Cari film...',
-                            hintStyle: TextStyle(color: Colors.grey),
-                            prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.only(top: 10),
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: Container(
+  height: 40,
+  decoration: BoxDecoration(color: const Color(0xFF2A2A2A), borderRadius: BorderRadius.circular(8)),
+  child: TextField(
+    onChanged: (value) {
+      setState(() {
+        _searchQuery = value.toLowerCase();
+      });
+    },
+    style: const TextStyle(color: Colors.white, fontSize: 14),
+    decoration: const InputDecoration(
+      hintText: 'Cari film...',
+      hintStyle: TextStyle(color: Colors.grey),
+      prefixIcon: Icon(Icons.search, color: Colors.grey, size: 20),
+      border: InputBorder.none,
+      contentPadding: EdgeInsets.only(top: 10),
+      ),
+    ),
+  ),
+),
                     const SizedBox(width: 12),
                     const Text('Cari', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
             ),
+            
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  _buildMenuChip('LIVE', Colors.red),
-                  _buildMenuChip('Sedang tren', Colors.white, isBold: true),
-                  _buildMenuChip('MangoTV', Colors.orange),
-                  _buildMenuChip('Film', Colors.grey),
-                  _buildMenuChip('TV', Colors.grey),
+                  _buildMenuChip('BARU', Colors.greenAccent, isBold: true),
+                  _buildMenuChip('AI Drama', Colors.white, isBold: true),
+                  _buildMenuChip('Film Indie', Colors.orange),
+                  _buildMenuChip('Animasi', Colors.grey),
+                  _buildMenuChip('Drama Korea', Colors.grey),
+                  _buildMenuChip('Film Barat', Colors.grey),
+                  _buildMenuChip('Dokumenter', Colors.grey),
+                  _buildMenuChip('Horor', Colors.grey),
+                  _buildMenuChip('Komedi', Colors.grey),
+                  _buildMenuChip('Trending', Colors.grey),
                 ],
               ),
             ),
-            if (featuredMovie != null)
-              GestureDetector(
-                onTap: () => openPlayer(featuredMovie),
-                child: Stack(
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: featuredMovie.posterUrl,
-                      height: 220, width: double.infinity, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(height: 220, color: Colors.grey[900]),
-                    ),
-                    Positioned(
-                      bottom: 0, left: 0, right: 0,
+
+            // BANNER AUTO-SLIDE
+            if (movies.isNotEmpty)
+              SizedBox(
+                height: 220,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: movies.length > 4 ? 4 : movies.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentBannerIndex = index;
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final Movie bannerMovie = movies[index];
+                    return GestureDetector(
+                      onTap: () => openPlayer(bannerMovie),
                       child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, const Color(0xFF0F0F0F)],
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              CachedNetworkImage(
+                                imageUrl: bannerMovie.posterUrl.isNotEmpty 
+                                    ? bannerMovie.posterUrl 
+                                    : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1000&auto=format&fit=crop',
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(color: Colors.grey[900]),
+                              ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter, 
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 16, left: 16, right: 16,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(bannerMovie.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 4),
+                                          Text('${bannerMovie.year} | ${bannerMovie.genres.join(", ")}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.play_arrow, color: Colors.black),
+                                        onPressed: () => openPlayer(bannerMovie),
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              )
+                            ],
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(featuredMovie.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text('${featuredMovie.year} | ${featuredMovie.genres.join(", ")}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
-                              child: IconButton(
-                                icon: const Icon(Icons.play_arrow, color: Colors.black),
-                                onPressed: () => openPlayer(featuredMovie),
-                              ),
-                            )
-                          ],
-                        ),
                       ),
-                    )
-                  ],
+                    );
+                  },
                 ),
               ),
+
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
               child: Row(
@@ -174,19 +278,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.only(left: 16, bottom: 16),
               child: Row(
                 children: [
                   _buildFilterChip('Semua', isActive: true),
-                  _buildFilterChip('Drama AI'),
-                  _buildFilterChip('Indo Drama'),
-                  _buildFilterChip('C-Drama'),
-                  _buildFilterChip('K-Drama'),
+                  _buildFilterChip('psycho'),
+                  _buildFilterChip('fantasy'),
+                  _buildFilterChip('Romance'),
+                  _buildFilterChip('Horror'),
+                  _buildFilterChip('DLL'),
                 ],
               ),
             ),
+
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -194,10 +301,10 @@ class _HomeScreenState extends State<HomeScreen> {
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3, childAspectRatio: 0.55, crossAxisSpacing: 8, mainAxisSpacing: 16,
               ),
-              itemCount: otherMovies.length,
+              itemCount: movies.length,
               itemBuilder: (context, index) {
                 return GestureDetector(
-                  onTap: () => openPlayer(otherMovies[index]),
+                  onTap: () => openPlayer(movies[index]),
                   child: Stack(
                     children: [
                       Column(
@@ -207,13 +314,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
-                                imageUrl: otherMovies[index].posterUrl, fit: BoxFit.cover, width: double.infinity,
+                                imageUrl: movies[index].posterUrl, fit: BoxFit.cover, width: double.infinity,
                                 errorWidget: (_, __, ___) => Container(color: Colors.grey[900]),
                               ),
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(otherMovies[index].title, style: const TextStyle(color: Colors.white, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(movies[index].title, style: const TextStyle(color: Colors.white, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                         ],
                       ),
                       Positioned(
